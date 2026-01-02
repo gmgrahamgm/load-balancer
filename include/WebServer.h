@@ -2,9 +2,9 @@
 #define WEBSERVER_H
 
 #include "RequestQueue.h"
+#include "Logger.h"
 #include <thread>
 #include <atomic>
-#include <mutex>
 #include <chrono>
 #include <stop_token>
 
@@ -18,10 +18,10 @@ public:
      * @param sid Server ID (unique within a LoadBalancer)
      * @param lbid LoadBalancer ID (for logging)
      * @param q Pointer to shared RequestQueue
-     * @param log_mtx Pointer to shared logging mutex
+     * @param logger Pointer to shared Logger
      * @param clk Pointer to shared global clock
      */
-    WebServer(int sid, int lbid, RequestQueue* q, std::mutex* log_mtx, std::atomic<int>* clk);
+    WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk);
     
     /**
      * Destructor - automatically joins worker thread
@@ -60,7 +60,7 @@ private:
     std::atomic<bool> is_busy;
     std::atomic<int> total_requests_processed;
     RequestQueue* queue_ptr;
-    std::mutex* log_mutex_ptr;
+    Logger* log_ptr;
     std::atomic<int>* clock_ptr;
     std::jthread worker_thread;  // Must be last - initialized after all members it references
 };

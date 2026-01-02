@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "WebServer.h"
 #include "RequestQueue.h"
+#include "Logger.h"
 #include <vector>
 #include <memory>
 #include <mutex>
@@ -20,9 +21,9 @@ public:
      * @param id LoadBalancer ID (for multi-LB support)
      * @param cfg Configuration parameters
      * @param clk Pointer to shared global clock
-     * @param log_mtx Pointer to shared logging mutex
+     * @param logger Pointer to shared Logger
      */
-    LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, std::mutex* log_mtx);
+    LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, Logger* logger);
     
     /**
      * Destructor: Ensures clean shutdown
@@ -89,7 +90,7 @@ private:
     std::atomic<int> next_server_id;
     
     std::atomic<int>* global_clock_ptr;
-    std::mutex* log_mutex_ptr;
+    Logger* log_ptr;
     
     bool is_shutdown;
 };

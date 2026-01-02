@@ -1,5 +1,7 @@
 #include "LoadBalancer.h"
+#include "Logger.h"
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <thread>
 #include <chrono>
@@ -57,7 +59,7 @@ int main(int argc, char* argv[]) {
     
     // Create shared resources
     std::atomic<int> global_clock(0);
-    std::mutex log_mutex;
+    Logger logger("simulation.log");
     std::atomic<bool> shutdown_flag(false);
     std::atomic<int> request_counter(0);
     
@@ -65,7 +67,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::unique_ptr<LoadBalancer>> loadbalancers;
     for (int i = 0; i < config.num_loadbalancers; i++) {
         loadbalancers.push_back(
-            std::make_unique<LoadBalancer>(i, config, &global_clock, &log_mutex)
+            std::make_unique<LoadBalancer>(i, config, &global_clock, &logger)
         );
     }
     
@@ -112,16 +114,16 @@ int main(int argc, char* argv[]) {
         
         // Log statistics every 500 cycles
         if (cycle % 500 == 0 && cycle > 0) {
-            std::lock_guard<std::mutex> lock(log_mutex);
-            std::cout << "\n=== Cycle " << cycle << " Statistics ===" << std::endl;
+            std::ostringstream oss;
+            oss << "\n=== Cycle " << cycle << " Statistics ===\n";
             for (int i = 0; i < config.num_loadbalancers; i++) {
-                std::cout << "  LB " << i << ": "
-                          << "Queue=" << loadbalancers[i]->getQueueSize()
-                          << ", Servers=" << loadbalancers[i]->getServerCount()
-                          << ", Scaling Events=" << loadbalancers[i]->getScalingEventCount()
-                          << std::endl;
+                oss << "  LB " << i << ": "
+                    << "Queue=" << loadbalancers[i]->getQueueSize()
+                    << ", Servers=" << loadbalancers[i]->getServerCount()
+                    << ", Scaling Events=" << loadbalancers[i]->getScalingEventCount()
+                    << "\n";
             }
-            std::cout << std::endl;
+            logger.log(oss.str());
         }
         
         // Small sleep to simulate cycle timing (1ms per cycle)

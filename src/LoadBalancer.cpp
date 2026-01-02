@@ -1,10 +1,11 @@
 #include "LoadBalancer.h"
 #include <iostream>
+#include <sstream>
 
-LoadBalancer::LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, std::mutex* log_mtx)
+LoadBalancer::LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, Logger* logger)
     : lb_id(id), config(cfg), last_scaling_cycle(-cfg.scaling_cooldown),
       scaling_events_up(0), scaling_events_down(0), next_server_id(0),
-      global_clock_ptr(clk), log_mutex_ptr(log_mtx), is_shutdown(false) {
+      global_clock_ptr(clk), log_ptr(logger), is_shutdown(false) {
     
     // Create initial server pool
     for (int i = 0; i < config.initial_servers; i++) {
@@ -12,11 +13,10 @@ LoadBalancer::LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, std
     }
     
     // Log initialization
-    {
-        std::lock_guard<std::mutex> lock(*log_mutex_ptr);
-        std::cout << "[LB:" << lb_id << "][Cycle:" << global_clock_ptr->load() << "] "
-                  << "Initialized with " << config.initial_servers << " servers" << std::endl;
-    }
+    std::ostringstream oss;
+    oss << "[LB:" << lb_id << "][Cycle:" << global_clock_ptr->load() << "] "
+        << "Initialized with " << config.initial_servers << " servers";
+    log_ptr->log(oss.str());
 }
 
 LoadBalancer::~LoadBalancer() {
@@ -45,12 +45,11 @@ void LoadBalancer::checkAndScaleServers(int current_cycle) {
             last_scaling_cycle = current_cycle;
             scaling_events_up++;
             
-            {
-                std::lock_guard<std::mutex> lock(*log_mutex_ptr);
-                std::cout << "[LB:" << lb_id << "][Cycle:" << current_cycle << "] "
-                          << "Scaled UP to " << getServerCount() << " servers "
-                          << "(queue size: " << queue_size << ")" << std::endl;
-            }
+            std::ostringstream oss;
+            oss << "[LB:" << lb_id << "][Cycle:" << current_cycle << "] "
+                << "Scaled UP to " << getServerCount() << " servers "
+                << "(queue size: " << queue_size << ")";
+            log_ptr->log(oss.str());
         }
     }
     // Scale down if queue is too small
@@ -59,22 +58,21 @@ void LoadBalancer::checkAndScaleServers(int current_cycle) {
             removeServer();
             last_scaling_cycle = current_cycle;
             scaling_events_down++;
-            {
-                std::lock_guard<std::mutex> lock(*log_mutex_ptr);
-                std::cout << "[LB:" << lb_id << "][Cycle:" << current_cycle << "] "
-                          << "Scaled DOWN to " << getServerCount() << " servers "
-                          << "(queue size: " << queue_size << ")" << std::endl;
-            }
+            
+            std::ostringstream oss;
+            oss << "[LB:" << lb_id << "][Cycle:" << current_cycle << "] "
+                << "Scaled DOWN to " << getServerCount() << " servers "
+                << "(queue size: " << queue_size << ")";
+            log_ptr->log(oss.str());
         }
     }
 }
 
 void LoadBalancer::shutdown() {
-    {
-        std::lock_guard<std::mutex> lock(*log_mutex_ptr);
-        std::cout << "[LB:" << lb_id << "][Cycle:" << global_clock_ptr->load() << "] "
-                  << "Shutting down..." << std::endl;
-    }
+    std::ostringstream oss;
+    oss << "[LB:" << lb_id << "][Cycle:" << global_clock_ptr->load() << "] "
+        << "Shutting down...";
+    log_ptr->log(oss.str());
     
     // Signal queue shutdown to release all blocking servers
     queue.setShutdown();
@@ -91,13 +89,12 @@ void LoadBalancer::shutdown() {
         }
     }
     
-    {
-        std::lock_guard<std::mutex> lock(*log_mutex_ptr);
-        std::cout << "[LB:" << lb_id << "] Shutdown complete. "
-                  << "Total requests processed: " << total_processed
-                  << ", Scaling events: +" << scaling_events_up 
-                  << " -" << scaling_events_down << std::endl;
-    }
+    std::ostringstream oss2;
+    oss2 << "[LB:" << lb_id << "] Shutdown complete. "
+         << "Total requests processed: " << total_processed
+         << ", Scaling events: +" << scaling_events_up 
+         << " -" << scaling_events_down;
+    log_ptr->log(oss2.str());
     
     is_shutdown = true;
 }
@@ -123,7 +120,7 @@ void LoadBalancer::addServer() {
     std::lock_guard<std::mutex> lock(server_vector_mutex);
     int sid = next_server_id++;
     webservers.emplace_back(
-        std::make_unique<WebServer>(sid, lb_id, &queue, log_mutex_ptr, global_clock_ptr)
+        std::make_unique<WebServer>(sid, lb_id, &queue, log_ptr, global_clock_ptr)
     );
 }
 
