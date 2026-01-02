@@ -11,11 +11,12 @@ CONFIG_OBJ = $(OBJ_DIR)/Config.o
 
 # Test executables
 TEST_CONFIG = $(BIN_DIR)/test_config
+TEST_REQUEST = $(BIN_DIR)/test_request
 
 # Default target
-all: directories $(TEST_CONFIG)
+all: directories $(TEST_CONFIG) $(TEST_REQUEST)
 
-# Create necessary directories
+# Create directories
 directories:
 	mkdir -p $(OBJ_DIR) $(BIN_DIR) logs
 
@@ -23,15 +24,22 @@ directories:
 $(TEST_CONFIG): $(CONFIG_OBJ) $(OBJ_DIR)/test_config.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-# Compile object files
+$(TEST_REQUEST): $(OBJ_DIR)/test_request.o
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+# Compile obj files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Run test
-test: $(TEST_CONFIG)
+# Run tests
+test: $(TEST_CONFIG) $(TEST_REQUEST)
+	@echo "Running Config tests..."
 	./$(TEST_CONFIG)
+	@echo ""
+	@echo "Running Request tests..."
+	./$(TEST_REQUEST)
 
-# Clean build artifacts
+# Clean
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
