@@ -42,7 +42,7 @@ struct Request {
      * @param min_time Minimum processing time
      * @param max_time Maximum processing time
      */
-    Request(int id, int cycle, int min_time, int max_time) 
+    Request(int id = 0, int cycle = 0, int min_time = 10, int max_time = 100) 
         : request_id(id), arrival_time(cycle) {
         
         static std::random_device rd;
