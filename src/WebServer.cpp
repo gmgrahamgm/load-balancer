@@ -3,31 +3,17 @@
 #include <iomanip>
 
 WebServer::WebServer(int sid, int lbid, RequestQueue* q, std::mutex* log_mtx, std::atomic<int>* clk)
-    : server_id(sid), lb_id(lbid), is_busy(false), server_shutdown_flag(false),
-      total_requests_processed(0), queue_ptr(q), log_mutex_ptr(log_mtx), clock_ptr(clk) {
-    
-    // Spawn worker thread
-    worker_thread = std::thread(&WebServer::workerThread, this);
-}
-
-WebServer::~WebServer() {
-    if (worker_thread.joinable()) {
-        worker_thread.join();
-    }
-}
-
-void WebServer::join() {
-    if (worker_thread.joinable()) {
-        worker_thread.join();
-    }
+    : server_id(sid), lb_id(lbid), is_busy(false), total_requests_processed(0),
+      queue_ptr(q), log_mutex_ptr(log_mtx), clock_ptr(clk),
+      worker_thread([this](std::stop_token st) { workerThread(st); }) {
 }
 
 int WebServer::getProcessedCount() const {
-    return total_requests_processed;
+    return total_requests_processed.load(std::memory_order_relaxed);
 }
 
 bool WebServer::isBusy() const {
-    return is_busy;
+    return is_busy.load(std::memory_order_relaxed);
 }
 
 int WebServer::getServerId() const {
@@ -35,28 +21,26 @@ int WebServer::getServerId() const {
 }
 
 void WebServer::requestShutdown() {
-    server_shutdown_flag = true;
+    worker_thread.request_stop();
 }
 
-void WebServer::workerThread() {
-    while (!server_shutdown_flag) {
-        Request req;
-        
-        // Try to pop request from queue (blocking)
-        if (!queue_ptr->pop(req)) {
-            // Global queue shutdown - exit thread
+void WebServer::workerThread(std::stop_token st) {
+    for (;;) {
+        // Check if we're asked to stop before taking a new request
+        if (st.stop_requested()) {
             break;
         }
         
-        // Check shutdown flag again after pop (in case it was set while blocking)
-        if (server_shutdown_flag) {
-            // Put request back if we need to shutdown
-            queue_ptr->push(req);
+        Request req;
+        
+        // Try to pop request from queue with stop_token support
+        if (!queue_ptr->pop(req, st)) {
+            // Returns false on stop request or global queue shutdown
             break;
         }
         
         // Mark as busy
-        is_busy = true;
+        is_busy.store(true, std::memory_order_relaxed);
         
         // Log start of processing
         {
@@ -81,8 +65,11 @@ void WebServer::workerThread() {
         }
         
         // Update stats and mark as idle
-        total_requests_processed++;
-        is_busy = false;
+        total_requests_processed.fetch_add(1, std::memory_order_relaxed);
+        is_busy.store(false, std::memory_order_relaxed);
+        
+        // If stop is requested during processing, we finish the request
+        // and exit before taking the next one (checked at loop top)
     }
     
     // Log thread exit
@@ -90,6 +77,6 @@ void WebServer::workerThread() {
         std::lock_guard<std::mutex> lock(*log_mutex_ptr);
         std::cout << "[LB:" << lb_id << "][Server:" << server_id << "] "
                   << "Worker thread exiting. Total processed: " 
-                  << total_requests_processed << std::endl;
+                  << total_requests_processed.load(std::memory_order_relaxed) << std::endl;
     }
 }

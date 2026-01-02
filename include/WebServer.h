@@ -6,6 +6,7 @@
 #include <atomic>
 #include <mutex>
 #include <chrono>
+#include <stop_token>
 
 /**
  * WebServer worker thread that processes requests from a queue.
@@ -23,14 +24,9 @@ public:
     WebServer(int sid, int lbid, RequestQueue* q, std::mutex* log_mtx, std::atomic<int>* clk);
     
     /**
-     * Destructor
+     * Destructor - automatically joins worker thread
      */
-    ~WebServer();
-    
-    /**
-     * Wait for worker thread to complete
-     */
-    void join();
+    ~WebServer() = default;
     
     /**
      * Get total requests processed by this server
@@ -55,18 +51,18 @@ public:
 private:
     /**
      * Worker thread main loop - processes requests from queue
+     * @param st Stop token for graceful shutdown
      */
-    void workerThread();
+    void workerThread(std::stop_token st);
     
     int server_id;
     int lb_id;
     std::atomic<bool> is_busy;
-    std::atomic<bool> server_shutdown_flag;  // Individual server shutdown control
     std::atomic<int> total_requests_processed;
-    std::thread worker_thread;
     RequestQueue* queue_ptr;
     std::mutex* log_mutex_ptr;
     std::atomic<int>* clock_ptr;
+    std::jthread worker_thread;  // Must be last - initialized after all members it references
 };
 
 #endif // WEBSERVER_H

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <stop_token>
 
 /**
  * Thread-safe queue for Request objects.
@@ -31,6 +32,15 @@ public:
     bool pop(Request& req);
     
     /**
+     * Remove and return request from queue with stop_token support.
+     * Blocks if queue is empty until item available, shutdown, or stop requested.
+     * @param req Reference to store the popped request
+     * @param st Stop token for cancellation
+     * @return true if request retrieved, false if shutdown/stop with empty queue
+     */
+    bool pop(Request& req, std::stop_token st);
+    
+    /**
      * Get current queue size.
      */
     size_t size() const;
@@ -49,7 +59,7 @@ public:
 private:
     std::queue<Request> requests;
     mutable std::mutex queue_mutex;
-    std::condition_variable queue_cv;
+    std::condition_variable_any queue_cv;
     std::atomic<bool> shutdown_flag;
 };
 
