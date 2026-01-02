@@ -31,3 +31,6 @@ request_gen_interval_max=20
 # Request processing time range (ms)
 min_processing_time=10
 max_processing_time=100
+
+# Blocked IP ranges in CIDR notation
+blocked_ips=10.0.0.0/8

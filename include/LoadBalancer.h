@@ -5,6 +5,7 @@
 #include "WebServer.h"
 #include "RequestQueue.h"
 #include "Logger.h"
+#include "IPBlocker.h"
 #include <vector>
 #include <memory>
 #include <mutex>
@@ -91,6 +92,7 @@ private:
     
     std::atomic<int>* global_clock_ptr;
     Logger* log_ptr;
+    IPBlocker ip_blocker;
     
     bool is_shutdown;
 };

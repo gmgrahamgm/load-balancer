@@ -12,6 +12,7 @@ QUEUE_OBJ = $(OBJ_DIR)/RequestQueue.o
 WEBSERVER_OBJ = $(OBJ_DIR)/WebServer.o
 LOADBALANCER_OBJ = $(OBJ_DIR)/LoadBalancer.o
 LOGGER_OBJ = $(OBJ_DIR)/Logger.o
+IPBLOCKER_OBJ = $(OBJ_DIR)/IPBlocker.o
 
 # Main executable
 MAIN = $(BIN_DIR)/loadbalancer
@@ -32,7 +33,7 @@ directories:
 	mkdir -p $(OBJ_DIR) $(BIN_DIR) logs
 
 # Main executable
-$(MAIN): $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(OBJ_DIR)/main.o
+$(MAIN): $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(IPBLOCKER_OBJ) $(OBJ_DIR)/main.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 # Test executables
@@ -48,10 +49,10 @@ $(TEST_QUEUE): $(QUEUE_OBJ) $(OBJ_DIR)/test_queue.o
 $(TEST_WEBSERVER): $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOGGER_OBJ) $(OBJ_DIR)/test_webserver.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-$(TEST_LOADBALANCER): $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(OBJ_DIR)/test_loadbalancer.o
+$(TEST_LOADBALANCER): $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(IPBLOCKER_OBJ) $(OBJ_DIR)/test_loadbalancer.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-$(TEST_MAIN): $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(OBJ_DIR)/test_main.o
+$(TEST_MAIN): $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(IPBLOCKER_OBJ) $(OBJ_DIR)/test_main.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 # Compile obj files

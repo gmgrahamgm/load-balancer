@@ -7,6 +7,14 @@ LoadBalancer::LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, Log
       scaling_events_up(0), scaling_events_down(0), next_server_id(0),
       global_clock_ptr(clk), log_ptr(logger), is_shutdown(false) {
     
+    // Initialize IP blocker with configured ranges
+    if (!config.blocked_ip_ranges.empty()) {
+        int loaded = ip_blocker.loadBlockedRanges(config.blocked_ip_ranges);
+        std::ostringstream oss;
+        oss << "[LB:" << lb_id << "] Loaded " << loaded << " blocked IP ranges";
+        log_ptr->log(oss.str());
+    }
+    
     // Create initial server pool
     for (int i = 0; i < config.initial_servers; i++) {
         addServer();
@@ -26,6 +34,23 @@ LoadBalancer::~LoadBalancer() {
 }
 
 void LoadBalancer::addRequest(const Request& req) {
+    // Check if either IP, in or out, is blocked
+    if (ip_blocker.isBlocked(req.ip_in)) {
+        std::ostringstream oss;
+        oss << "[LB:" << lb_id << "][BLOCKED] Request " << req.request_id 
+            << " - incoming IP " << req.ip_in << " is blocked";
+        log_ptr->log(oss.str());
+        return;
+    }
+    
+    if (ip_blocker.isBlocked(req.ip_out)) {
+        std::ostringstream oss;
+        oss << "[LB:" << lb_id << "][BLOCKED] Request " << req.request_id 
+            << " - outgoing IP " << req.ip_out << " is blocked";
+        log_ptr->log(oss.str());
+        return;
+    }
+    
     queue.push(req);
 }
 

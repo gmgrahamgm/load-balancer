@@ -67,7 +67,27 @@ bool Config::parseLine(const std::string& line) {
     value.erase(0, value.find_first_not_of(" \t"));
     value.erase(value.find_last_not_of(" \t") + 1);
     
-    // Convert value to integer
+    // Special handling for blocked_ips (comma-separated list)
+    if (key == "blocked_ips") {
+        // Split value by commas
+        blocked_ip_ranges.clear();
+        std::stringstream ss(value);
+        std::string cidr;
+        
+        while (std::getline(ss, cidr, ',')) {
+            // Trim whitespace from each CIDR string
+            cidr.erase(0, cidr.find_first_not_of(" \t"));
+            cidr.erase(cidr.find_last_not_of(" \t") + 1);
+            
+            if (!cidr.empty()) {
+                blocked_ip_ranges.push_back(cidr);
+            }
+        }
+        
+        return true;
+    }
+    
+    // Convert value to integer for numeric fields
     int int_value;
     try {
         int_value = std::stoi(value);

@@ -2,6 +2,7 @@
 #define CONFIG_H
 
 #include <string>
+#include <vector>
 
 /**
  * Configuration parameters for the load balancer simulation.
@@ -30,6 +31,9 @@ public:
     // Request processing time ranges
     int min_processing_time;
     int max_processing_time;
+    
+    // IP blocking
+    std::vector<std::string> blocked_ip_ranges;  // CIDR notation ranges
     
     // Constructor with default values
     Config();

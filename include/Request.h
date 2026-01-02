@@ -5,6 +5,7 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <cstdint>
 
 /**
  * Represents a web request with random IP addresses, processing time, and job type.
@@ -33,6 +34,42 @@ struct Request {
             << dist(gen) << "." 
             << dist(gen);
         return oss.str();
+    }
+    
+    /**
+     * Convert dotted-decimal IP address to 32-bit unsigned integer
+     * @param ip IP address string (e.g., "192.168.1.1")
+     * @return 32-bit representation, or 0 if invalid format
+     */
+    static uint32_t ipToUint32(const std::string& ip) {
+        std::istringstream iss(ip);
+        std::string octet;
+        uint32_t result = 0;
+        int count = 0;
+        
+        while (std::getline(iss, octet, '.')) {
+            if (count >= 4) return 0;  // Too many octets
+            
+            // Convert octet to integer
+            int value;
+            try {
+                value = std::stoi(octet);
+            } catch (...) {
+                return 0;  // Invalid number
+            }
+            
+            // Validate range
+            if (value < 0 || value > 255) return 0;
+            
+            // Shift and add to result
+            result = (result << 8) | static_cast<uint32_t>(value);
+            count++;
+        }
+        
+        // Must have exactly 4 octets
+        if (count != 4) return 0;
+        
+        return result;
     }
     
     /**
