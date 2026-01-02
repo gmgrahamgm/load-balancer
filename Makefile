@@ -12,6 +12,9 @@ QUEUE_OBJ = $(OBJ_DIR)/RequestQueue.o
 WEBSERVER_OBJ = $(OBJ_DIR)/WebServer.o
 LOADBALANCER_OBJ = $(OBJ_DIR)/LoadBalancer.o
 
+# Main executable
+MAIN = $(BIN_DIR)/loadbalancer
+
 # Test executables
 TEST_CONFIG = $(BIN_DIR)/test_config
 TEST_REQUEST = $(BIN_DIR)/test_request
@@ -20,11 +23,15 @@ TEST_WEBSERVER = $(BIN_DIR)/test_webserver
 TEST_LOADBALANCER = $(BIN_DIR)/test_loadbalancer
 
 # Default target
-all: directories $(TEST_CONFIG) $(TEST_REQUEST) $(TEST_QUEUE) $(TEST_WEBSERVER) $(TEST_LOADBALANCER)
+all: directories $(MAIN) $(TEST_CONFIG) $(TEST_REQUEST) $(TEST_QUEUE) $(TEST_WEBSERVER) $(TEST_LOADBALANCER)
 
 # Create directories
 directories:
 	mkdir -p $(OBJ_DIR) $(BIN_DIR) logs
+
+# Main executable
+$(MAIN): $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(OBJ_DIR)/main.o
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
 # Test executables
 $(TEST_CONFIG): $(CONFIG_OBJ) $(OBJ_DIR)/test_config.o
@@ -63,8 +70,12 @@ test: $(TEST_CONFIG) $(TEST_REQUEST) $(TEST_QUEUE) $(TEST_WEBSERVER) $(TEST_LOAD
 	@echo "Running LoadBalancer tests..."
 	./$(TEST_LOADBALANCER)
 
+# Run main simulation
+run: $(MAIN)
+	./$(MAIN) config.txt
+
 # Clean
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all directories test clean
+.PHONY: all directories test run clean

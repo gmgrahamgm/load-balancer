@@ -1,0 +1,33 @@
+# Load Balancer Configuration
+
+# Number of LoadBalancer instances to create
+num_loadbalancers=2
+
+# Initial number of WebServer threads per LoadBalancer
+initial_servers=10
+
+# Total simulation cycles to run
+runtime_cycles=10000
+
+# Scaling threshold: Add server when queue > threshold_high * num_servers
+scaling_threshold_high=25
+
+# Scaling threshold: Remove server when queue < threshold_low * num_servers
+scaling_threshold_low=15
+
+# Cooldown period between scaling operations (in cycles)
+scaling_cooldown=100
+
+# Minimum number of servers per LoadBalancer
+min_servers=5
+
+# Maximum number of servers per LoadBalancer
+max_servers=50
+
+# Request generation interval range (ms)
+request_gen_interval_min=5
+request_gen_interval_max=20
+
+# Request processing time range (ms)
+min_processing_time=10
+max_processing_time=100
