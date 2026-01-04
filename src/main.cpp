@@ -10,7 +10,7 @@
 
 // Request generator thread function
 void requestGenerator(LoadBalancer* lb, const Config& config, std::atomic<bool>& shutdown_flag, 
-                      std::atomic<int>& request_counter, int lb_id) {
+                      std::atomic<int>& request_counter, int lb_id, std::atomic<int>* global_clock) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> interval_dist(
@@ -19,8 +19,23 @@ void requestGenerator(LoadBalancer* lb, const Config& config, std::atomic<bool>&
     );
     
     while (!shutdown_flag) {
-        // Sleep for random interval
-        int sleep_ms = interval_dist(gen);
+        // Calculate current position in simulation timeline
+        int current_cycle = global_clock->load();
+        double progress = (double)current_cycle / config.runtime_cycles;
+        
+        // Determine activity level based on simulation progress
+        int sleep_ms;
+        if (progress >= 0.6 && progress < 0.9) {
+            // High activity period (60%-90%): burst mode
+            sleep_ms = config.request_gen_interval_min;
+        } else if (progress >= 0.2 && progress < 0.4) {
+            // Low activity period (20%-40%): quiet period
+            sleep_ms = config.request_gen_interval_max;
+        } else {
+            // Normal activity: random interval
+            sleep_ms = interval_dist(gen);
+        }
+        
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
         
         if (shutdown_flag) break;
@@ -73,6 +88,7 @@ int main(int argc, char* argv[]) {
     }
     
     // Pre-fill each LoadBalancer queue with initial requests
+    // ? Not sure if I should do initial requests, idk what Lightfoot wants when he says "print starting queue and ending queue"
     std::cout << "Pre-filling queues with initial requests..." << std::endl;
     int initial_requests_per_lb = config.initial_servers * 20;
     std::vector<size_t> initial_queue_sizes;
@@ -96,7 +112,8 @@ int main(int argc, char* argv[]) {
             std::ref(config), 
             std::ref(shutdown_flag), 
             std::ref(request_counter),
-            i
+            i,
+            &global_clock
         );
     }
     
