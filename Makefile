@@ -84,8 +84,16 @@ run: $(MAIN)
 loadbalancer: $(MAIN)
 	./$(MAIN) config.txt
 
+# Generate documentation
+docs:
+	doxygen Doxyfile
+
+# Clean documentation
+docs-clean:
+	rm -rf docs
+
 # Clean
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all directories test run loadbalancer clean
+.PHONY: all directories test run loadbalancer clean docs docs-clean
