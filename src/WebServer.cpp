@@ -103,7 +103,7 @@ void WebServer::workerThread(std::stop_token st) {
                 << " from " << req.ip_in 
                 << " (job: " << req.job_type 
                 << ", time: " << req.processing_time << ")";
-            log_ptr->log(oss.str());
+            log_ptr->log(oss.str(), LogColor::WHITE);
         }
         
         // Simulate processing by sleeping
@@ -116,7 +116,7 @@ void WebServer::workerThread(std::stop_token st) {
                  << "(" << server_type << ")" 
                  << "][Cycle:" << clock_ptr->load() << "] "
                  << "Completed request " << req.request_id;
-            log_ptr->log(oss2.str());
+            log_ptr->log(oss2.str(), LogColor::WHITE);
         }
         
         // Update stats and mark as idle
@@ -133,5 +133,5 @@ void WebServer::workerThread(std::stop_token st) {
     oss << "[LB:" << lb_id << "][Server:" << server_id << "(" << server_type << ")" << "] "
         << "Worker thread exiting. Total processed: " 
         << total_requests_processed.load(std::memory_order_relaxed);
-    log_ptr->log(oss.str());
+    log_ptr->log(oss.str(), LogColor::NONE);
 }

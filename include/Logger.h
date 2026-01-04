@@ -7,6 +7,18 @@
 #include <iostream>
 
 /**
+ * Color options for console output.
+ * Log files always receive plain text regardless of color choice.
+ */
+enum class LogColor {
+    NONE,    // Default terminal color
+    WHITE,   // Bright white
+    BLUE,    // Bright blue (scale up events)
+    ORANGE,  // Bright yellow/orange (scale down events)
+    RED      // Bright red (blocked IP events)
+};
+
+/**
  * Thread-safe Logger that writes to both console and file.
  * Handles all logging output for the load balancer simulation.
  */
@@ -25,9 +37,11 @@ public:
     
     /**
      * Write a message to both console and log file (thread-safe)
+     * Console output can be colored; file output is always plain text
      * @param message The message to log
+     * @param color Optional color for console output (default: NONE)
      */
-    void log(const std::string& message);
+    void log(const std::string& message, LogColor color = LogColor::NONE);
     
     /**
      * Set the log level

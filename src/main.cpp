@@ -61,23 +61,25 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    std::cout << "=== Load Balancer ===" << std::endl;
-    std::cout << "Configuration:" << std::endl;
-    std::cout << "\tLoad Balancers: " << config.num_loadbalancers << std::endl;
-    std::cout << "\tInitial Servers per LB: " << config.initial_servers << std::endl;
-    std::cout << "\tRuntime Cycles: " << config.runtime_cycles << std::endl;
-    std::cout << "\tScaling Thresholds: High=" << config.scaling_threshold_high 
-              << ", Low=" << config.scaling_threshold_low << std::endl;
-    std::cout << "\tServer Range: [" << config.min_servers << ", " 
-              << config.max_servers << "]" << std::endl;
-    std::cout << std::endl;
-    
-    // Create shared resources
+    // Create shared resources (logger needed for config output)
     std::atomic<int> global_clock(0);
     Logger logger("loadbalancer.log");
     logger.setLogLevel(config.log_level);  // Set log verbosity level
     std::atomic<bool> shutdown_flag(false);
     std::atomic<int> request_counter(0);
+    
+    // Log configuration to both console and file
+    std::ostringstream config_oss;
+    config_oss << "=== Load Balancer ===\n";
+    config_oss << "Configuration:\n";
+    config_oss << "\tLoad Balancers: " << config.num_loadbalancers << "\n";
+    config_oss << "\tInitial Servers per LB: " << config.initial_servers << "\n";
+    config_oss << "\tRuntime Cycles: " << config.runtime_cycles << "\n";
+    config_oss << "\tScaling Thresholds: High=" << config.scaling_threshold_high 
+              << ", Low=" << config.scaling_threshold_low << "\n";
+    config_oss << "\tServer Range: [" << config.min_servers << ", " 
+              << config.max_servers << "]";
+    logger.log(config_oss.str(), LogColor::NONE);
     
     // Create LoadBalancers
     std::vector<std::unique_ptr<LoadBalancer>> loadbalancers;
@@ -89,7 +91,10 @@ int main(int argc, char* argv[]) {
     
     // Pre-fill each LoadBalancer queue with initial requests
     // ? Not sure if I should do initial requests, idk what Lightfoot wants when he says "print starting queue and ending queue"
-    std::cout << "Pre-filling queues with initial requests..." << std::endl;
+    std::ostringstream prefill_oss;
+    prefill_oss << "Pre-filling queues with initial requests...";
+    logger.log(prefill_oss.str(), LogColor::NONE);
+    
     int initial_requests_per_lb = config.initial_servers * 20;
     std::vector<size_t> initial_queue_sizes;
     for (int i = 0; i < config.num_loadbalancers; i++) {
@@ -100,8 +105,10 @@ int main(int argc, char* argv[]) {
         }
         initial_queue_sizes.push_back(loadbalancers[i]->getQueueSize());
     }
-    std::cout << "\tAdded " << initial_requests_per_lb << " requests to each LoadBalancer" 
-              << std::endl << std::endl;
+    
+    std::ostringstream added_oss;
+    added_oss << "\tAdded " << initial_requests_per_lb << " requests to each LoadBalancer";
+    logger.log(added_oss.str(), LogColor::NONE);
     
     // Spawn request generator threads
     std::vector<std::jthread> generator_threads;
@@ -117,7 +124,9 @@ int main(int argc, char* argv[]) {
         );
     }
     
-    std::cout << "Starting..." << std::endl << std::endl;
+    std::ostringstream starting_oss;
+    starting_oss << "Starting...";
+    logger.log(starting_oss.str(), LogColor::NONE);
     
     // Main clock loop
     auto start_time = std::chrono::steady_clock::now();
@@ -161,14 +170,19 @@ int main(int argc, char* argv[]) {
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
     
     // Signal shutdown to request generators
-    std::cout << "\n=== Shutting Down ===" << std::endl;
+    std::ostringstream shutdown_start_oss;
+    shutdown_start_oss << "\n=== Shutting Down ===";
+    logger.log(shutdown_start_oss.str(), LogColor::NONE);
+    
     shutdown_flag.store(true);
     
     // Wait for generator threads to finish (jthread auto-joins on destruction)
     generator_threads.clear();
     
     // Shutdown all LoadBalancers
-    std::cout << "Shutting down LoadBalancers..." << std::endl;
+    std::ostringstream shutdown_lb_oss;
+    shutdown_lb_oss << "Shutting down LoadBalancers...";
+    logger.log(shutdown_lb_oss.str(), LogColor::NONE);
     for (auto& lb : loadbalancers) {
         lb->shutdown();
     }
@@ -188,16 +202,17 @@ int main(int argc, char* argv[]) {
     // This forces all std::jthread objects to join before we print final statistics
     loadbalancers.clear();
     
-    // Print final statistics
-    std::cout << "\n=== Final Statistics ===" << std::endl;
-    std::cout << "Runtime: " << duration.count() << " seconds" << std::endl;
-    std::cout << "Total cycles: " << config.runtime_cycles << std::endl;
-    std::cout << "Task time range: [" << config.min_processing_time << ", " 
-              << config.max_processing_time << "] ms" << std::endl;
-    std::cout << std::endl;
+    // Log final statistics to both console and file
+    std::ostringstream final_oss;
+    final_oss << "\n=== Final Statistics ===\n";
+    final_oss << "Runtime: " << duration.count() << " seconds\n";
+    final_oss << "Total cycles: " << config.runtime_cycles << "\n";
+    final_oss << "Task time range: [" << config.min_processing_time << ", " 
+              << config.max_processing_time << "] ms\n";
+    final_oss << "\n";
     
     // Per-LoadBalancer statistics
-    std::cout << "LoadBalancer Statistics:" << std::endl;
+    final_oss << "LoadBalancer Statistics:\n";
     int total_servers_added = 0;
     int total_servers_removed = 0;
     
@@ -210,22 +225,23 @@ int main(int argc, char* argv[]) {
         // Calculate total processed by summing all server processed counts
         // (We'll need to add this capability or estimate it)
         
-        std::cout << "  LB " << i << ":" << std::endl;
-        std::cout << "    Starting queue size: " << starting_queue << std::endl;
-        std::cout << "    Ending queue size: " << ending_queue << std::endl;
-        std::cout << "    Servers added: " << servers_added << std::endl;
-        std::cout << "    Servers removed: " << servers_removed << std::endl;
+        final_oss << "  LB " << i << ":\n";
+        final_oss << "    Starting queue size: " << starting_queue << "\n";
+        final_oss << "    Ending queue size: " << ending_queue << "\n";
+        final_oss << "    Servers added: " << servers_added << "\n";
+        final_oss << "    Servers removed: " << servers_removed << "\n";
         
         total_servers_added += servers_added;
         total_servers_removed += servers_removed;
     }
     
-    std::cout << std::endl;
-    std::cout << "Total requests generated: " << request_counter.load() << std::endl;
-    std::cout << "Total scaling events: +" << total_servers_added 
-              << " -" << total_servers_removed << std::endl;
+    final_oss << "\n";
+    final_oss << "Total requests generated: " << request_counter.load() << "\n";
+    final_oss << "Total scaling events: +" << total_servers_added 
+              << " -" << total_servers_removed << "\n";
+    final_oss << "\n=== Finished ===";
     
-    std::cout << "\n=== Finished ===" << std::endl;
+    logger.log(final_oss.str(), LogColor::NONE);
     
     return 0;
 }

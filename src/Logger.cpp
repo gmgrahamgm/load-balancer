@@ -25,13 +25,37 @@ Logger::~Logger() {
     }
 }
 
-void Logger::log(const std::string& message) {
+void Logger::log(const std::string& message, LogColor color) {
     std::lock_guard<std::mutex> lock(log_mutex);
     
-    // Write to console
-    std::cout << message << std::endl;
+    // Write to console with optional color
+    // Using softer ANSI colors for comfortable viewing
+    const char* color_code = "";
+    const char* reset_code = "\033[0m";
     
-    // Write to file if open
+    switch (color) {
+        case LogColor::WHITE:
+            color_code = "\033[37m";  // Normal white
+            break;
+        case LogColor::BLUE:
+            color_code = "\033[94m";  // Bright blue
+            break;
+        case LogColor::ORANGE:
+            color_code = "\033[93m";  // Bright yellow/orange
+            break;
+        case LogColor::RED:
+            color_code = "\033[91m";  // Bright red
+            break;
+        case LogColor::NONE:
+        default:
+            color_code = "";
+            reset_code = "";
+            break;
+    }
+    
+    std::cout << color_code << message << reset_code << std::endl;
+    
+    // Write to file as plain text (no color codes)
     if (file_open && file_stream.is_open()) {
         file_stream << message << std::endl;
         file_stream.flush();  // Flush for real-time viewing

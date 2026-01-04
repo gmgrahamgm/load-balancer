@@ -12,7 +12,7 @@ LoadBalancer::LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, Log
         int loaded = ip_blocker.loadBlockedRanges(config.blocked_ip_ranges);
         std::ostringstream oss;
         oss << "[LB:" << lb_id << "] Loaded " << loaded << " blocked IP ranges";
-        log_ptr->log(oss.str());
+        log_ptr->log(oss.str(), LogColor::NONE);
     }
     
     // Create initial server pool based on type percentages
@@ -35,7 +35,7 @@ LoadBalancer::LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, Log
     oss << "[LB:" << lb_id << "][Cycle:" << global_clock_ptr->load() << "] "
         << "Initialized with " << config.initial_servers << " servers "
         << "(S:" << num_streaming << ", P:" << num_processing << ", A:" << num_any << ")";
-    log_ptr->log(oss.str());
+    log_ptr->log(oss.str(), LogColor::NONE);
 }
 
 LoadBalancer::~LoadBalancer() {
@@ -50,7 +50,7 @@ void LoadBalancer::addRequest(const Request& req) {
         std::ostringstream oss;
         oss << "[LB:" << lb_id << "][BLOCKED] Request " << req.request_id 
             << " - incoming IP " << req.ip_in << " is blocked";
-        log_ptr->log(oss.str());
+        log_ptr->log(oss.str(), LogColor::RED);
         return;
     }
     
@@ -58,7 +58,7 @@ void LoadBalancer::addRequest(const Request& req) {
         std::ostringstream oss;
         oss << "[LB:" << lb_id << "][BLOCKED] Request " << req.request_id 
             << " - outgoing IP " << req.ip_out << " is blocked";
-        log_ptr->log(oss.str());
+        log_ptr->log(oss.str(), LogColor::RED);
         return;
     }
     
@@ -104,7 +104,7 @@ void LoadBalancer::checkAndScaleServers(int current_cycle) {
             oss << "[LB:" << lb_id << "][Cycle:" << current_cycle << "] "
                 << "Scaled UP to " << getServerCount() << " servers "
                 << "(queue size: S=" << s_size << ", P=" << p_size << ")";
-            log_ptr->log(oss.str());
+            log_ptr->log(oss.str(), LogColor::BLUE);
         }
     }
     // Scale down if queue is too small
@@ -118,7 +118,7 @@ void LoadBalancer::checkAndScaleServers(int current_cycle) {
             oss << "[LB:" << lb_id << "][Cycle:" << current_cycle << "] "
                 << "Scaled DOWN to " << getServerCount() << " servers "
                 << "(queue size: " << queue_size << ")";
-            log_ptr->log(oss.str());
+            log_ptr->log(oss.str(), LogColor::ORANGE);
         }
     }
 }
@@ -127,7 +127,7 @@ void LoadBalancer::shutdown() {
     std::ostringstream oss;
     oss << "[LB:" << lb_id << "][Cycle:" << global_clock_ptr->load() << "] "
         << "Shutting down...";
-    log_ptr->log(oss.str());
+    log_ptr->log(oss.str(), LogColor::NONE);
     
     // Signal both queues to shutdown and release all blocking servers
     queue_streaming.setShutdown();
@@ -156,7 +156,7 @@ void LoadBalancer::shutdown() {
          << "Total requests processed: " << total_processed
          << ", Scaling events: +" << scaling_events_up 
          << " -" << scaling_events_down;
-    log_ptr->log(oss2.str());
+    log_ptr->log(oss2.str(), LogColor::NONE);
     
     is_shutdown = true;
 }
@@ -217,7 +217,7 @@ void LoadBalancer::logPeriodicStats(int current_cycle) {
     oss << "Servers=" << (webservers_streaming.size() + webservers_processing.size() + webservers_any.size()) << " (S:" << webservers_streaming.size() << ",P:" << webservers_processing.size() << ",A:" << webservers_any.size() << "), ";
     oss << "Processed=" << total_processed_interval << ", ";
     oss << "Scaling Events=" << (scaling_events_up.load() + scaling_events_down.load());
-    log_ptr->log(oss.str());
+    log_ptr->log(oss.str(), LogColor::NONE);
     
     // Reset interval counters
     for (const auto& server : webservers_streaming) {
