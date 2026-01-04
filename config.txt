@@ -7,7 +7,7 @@ num_loadbalancers=1
 initial_servers=10
 
 # Total simulation cycles to run
-runtime_cycles=10000
+runtime_cycles=1000
 
 # Scaling threshold: Add server when queue > threshold_high * num_servers
 scaling_threshold_high=25
@@ -34,6 +34,11 @@ max_processing_time=100
 
 # Blocked IP ranges in CIDR notation
 blocked_ips=10.0.0.0/8
+
+# Type-based load balancing
+sorting=FALSE
+streaming_servers=0.5
+processing_servers=0.5
 
 # Logging configuration
 # Log level: 0=VERBOSE (all requests), 1=PERIODIC (stats every N cycles), 2=QUIET (scaling only)

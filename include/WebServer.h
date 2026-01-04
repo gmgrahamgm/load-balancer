@@ -21,8 +21,22 @@ public:
      * @param logger Pointer to shared Logger
      * @param clk Pointer to shared global clock
      * @param level Log verbosity level (0=VERBOSE, 1=PERIODIC, 2=QUIET)
+     * @param type Server type ('S'=streaming, 'P'=processing, 'A'=any)
      */
-    WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk, int level);
+    WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk, int level, char type);
+    
+    /**
+     * Constructor for 'A' type servers: Accepts two queues for round-robin processing
+     * @param sid Server ID (unique within a LoadBalancer)
+     * @param lbid LoadBalancer ID (for logging)
+     * @param q1 Pointer to first RequestQueue (streaming)
+     * @param q2 Pointer to second RequestQueue (processing)
+     * @param logger Pointer to shared Logger
+     * @param clk Pointer to shared global clock
+     * @param level Log verbosity level (0=VERBOSE, 1=PERIODIC, 2=QUIET)
+     * @param type Server type (must be 'A')
+     */
+    WebServer(int sid, int lbid, RequestQueue* q1, RequestQueue* q2, Logger* logger, std::atomic<int>* clk, int level, char type);
     
     /**
      * Destructor - automatically joins worker thread
@@ -55,6 +69,11 @@ public:
     int getServerId() const;
     
     /**
+     * Get server type ('S', 'P', or 'A')
+     */
+    char getServerType() const;
+    
+    /**
      * Request this server to gracefully shutdown after current request
      */
     void requestShutdown();
@@ -68,11 +87,14 @@ private:
     
     int server_id;
     int lb_id;
+    char server_type;  // 'S' for streaming, 'P' for processing, 'A' for any
     int log_level;
     std::atomic<bool> is_busy;
     std::atomic<int> total_requests_processed;
     std::atomic<int> processed_count_interval;  // Requests processed since last log
     RequestQueue* queue_ptr;
+    RequestQueue* queue_ptr_secondary;  // For 'A' servers: second queue for round-robin
+    std::atomic<bool> use_primary_queue;  // For 'A' servers: toggle between queues
     Logger* log_ptr;
     std::atomic<int>* clock_ptr;
     std::jthread worker_thread;  // Must be last - initialized after all members it references

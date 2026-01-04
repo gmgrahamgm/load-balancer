@@ -17,6 +17,9 @@ Config::Config() {
     request_gen_interval_max = 20;
     min_processing_time = 10;
     max_processing_time = 100;
+    sorting = false;            // Default to no type-based routing
+    streaming_servers = 0.5;    // Default 50% streaming
+    processing_servers = 0.5;   // Default 50% processing
     log_level = 0;       // Default to VERBOSE
     log_interval = 500;  // Default to every 500 cycles
 }
@@ -46,6 +49,15 @@ bool Config::loadFromFile(const std::string& filename) {
     }
     
     file.close();
+    
+    // Validate that streaming_servers + processing_servers <= 1.0
+    if (streaming_servers + processing_servers > 1.0) {
+        std::cerr << "Error: streaming_servers (" << streaming_servers 
+                  << ") + processing_servers (" << processing_servers 
+                  << ") = " << (streaming_servers + processing_servers)
+                  << " exceeds 1.0" << std::endl;
+        return false;
+    }
     
     return true;
 }
@@ -86,6 +98,44 @@ bool Config::parseLine(const std::string& line) {
             }
         }
         
+        return true;
+    }
+    
+    // Special handling for sorting (boolean)
+    if (key == "sorting") {
+        // Convert to uppercase for comparison
+        std::string val_upper = value;
+        for (auto& c : val_upper) c = std::toupper(c);
+        
+        if (val_upper == "TRUE" || val_upper == "1" || val_upper == "YES") {
+            sorting = true;
+        } else if (val_upper == "FALSE" || val_upper == "0" || val_upper == "NO") {
+            sorting = false;
+        } else {
+            return false;
+        }
+        return true;
+    }
+    
+    // Special handling for streaming_servers and processing_servers (double)
+    if (key == "streaming_servers" || key == "processing_servers") {
+        double double_value;
+        try {
+            double_value = std::stod(value);
+        } catch (...) {
+            return false;
+        }
+        
+        if (double_value < 0.0 || double_value > 1.0) {
+            std::cerr << "Error: " << key << " must be between 0.0 and 1.0" << std::endl;
+            return false;
+        }
+        
+        if (key == "streaming_servers") {
+            streaming_servers = double_value;
+        } else {
+            processing_servers = double_value;
+        }
         return true;
     }
     

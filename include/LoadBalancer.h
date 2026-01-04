@@ -87,8 +87,9 @@ public:
 private:
     /**
      * Add a new server to the pool
+     * @param type Server type ('S', 'P', or 'A')
      */
-    void addServer();
+    void addServer(char type);
     
     /**
      * Remove a server from the pool (graceful shutdown)
@@ -97,8 +98,11 @@ private:
     
     int lb_id;
     Config config;
-    RequestQueue queue;
-    std::vector<std::unique_ptr<WebServer>> webservers;
+    RequestQueue queue_streaming;   // Queue for streaming requests
+    RequestQueue queue_processing;  // Queue for processing requests
+    std::vector<std::unique_ptr<WebServer>> webservers_streaming;
+    std::vector<std::unique_ptr<WebServer>> webservers_processing;
+    std::vector<std::unique_ptr<WebServer>> webservers_any;
     std::mutex server_vector_mutex;
     
     int last_scaling_cycle;

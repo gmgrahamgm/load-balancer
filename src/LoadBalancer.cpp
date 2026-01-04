@@ -15,15 +15,26 @@ LoadBalancer::LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, Log
         log_ptr->log(oss.str());
     }
     
-    // Create initial server pool
-    for (int i = 0; i < config.initial_servers; i++) {
-        addServer();
+    // Create initial server pool based on type percentages
+    int num_streaming = static_cast<int>(config.initial_servers * config.streaming_servers);
+    int num_processing = static_cast<int>(config.initial_servers * config.processing_servers);
+    int num_any = config.initial_servers - num_streaming - num_processing;
+    
+    for (int i = 0; i < num_streaming; i++) {
+        addServer('S');
+    }
+    for (int i = 0; i < num_processing; i++) {
+        addServer('P');
+    }
+    for (int i = 0; i < num_any; i++) {
+        addServer('A');
     }
     
     // Log initialization
     std::ostringstream oss;
     oss << "[LB:" << lb_id << "][Cycle:" << global_clock_ptr->load() << "] "
-        << "Initialized with " << config.initial_servers << " servers";
+        << "Initialized with " << config.initial_servers << " servers "
+        << "(S:" << num_streaming << ", P:" << num_processing << ", A:" << num_any << ")";
     log_ptr->log(oss.str());
 }
 
@@ -51,7 +62,22 @@ void LoadBalancer::addRequest(const Request& req) {
         return;
     }
     
-    queue.push(req);
+    // Route request based on sorting configuration
+    if (config.sorting) {
+        // Type-based routing: S requests to streaming queue, P to processing queue
+        if (req.job_type == 'S') {
+            queue_streaming.push(req);
+        } else if (req.job_type == 'P') {
+            queue_processing.push(req);
+        } else {
+            // Unknown job type - default to streaming
+            queue_streaming.push(req);
+        }
+    } else {
+        // No sorting: push to both queues (servers will compete for requests)
+        queue_streaming.push(req);
+        queue_processing.push(req);
+    }
 }
 
 void LoadBalancer::checkAndScaleServers(int current_cycle) {
@@ -60,20 +86,24 @@ void LoadBalancer::checkAndScaleServers(int current_cycle) {
         return;
     }
     
-    size_t queue_size = queue.size();
+    size_t queue_size = queue_streaming.size() + queue_processing.size();
     int current_servers = getServerCount();
     
     // Scale up if queue is too large
     if (queue_size > static_cast<size_t>(config.scaling_threshold_high * current_servers)) {
         if (current_servers < config.max_servers) {
-            addServer();
+            // Add server based on which queue is larger (or 'A' if similar)
+            size_t s_size = queue_streaming.size();
+            size_t p_size = queue_processing.size();
+            char type = (s_size > p_size * 1.5) ? 'S' : (p_size > s_size * 1.5) ? 'P' : 'A';
+            addServer(type);
             last_scaling_cycle = current_cycle;
             scaling_events_up++;
             
             std::ostringstream oss;
             oss << "[LB:" << lb_id << "][Cycle:" << current_cycle << "] "
                 << "Scaled UP to " << getServerCount() << " servers "
-                << "(queue size: " << queue_size << ")";
+                << "(queue size: S=" << s_size << ", P=" << p_size << ")";
             log_ptr->log(oss.str());
         }
     }
@@ -99,8 +129,9 @@ void LoadBalancer::shutdown() {
         << "Shutting down...";
     log_ptr->log(oss.str());
     
-    // Signal queue shutdown to release all blocking servers
-    queue.setShutdown();
+    // Signal both queues to shutdown and release all blocking servers
+    queue_streaming.setShutdown();
+    queue_processing.setShutdown();
     
     // jthread will automatically join when webservers are destroyed
     // No need to manually join
@@ -109,7 +140,13 @@ void LoadBalancer::shutdown() {
     int total_processed = 0;
     {
         std::lock_guard<std::mutex> lock(server_vector_mutex);
-        for (const auto& server : webservers) {
+        for (const auto& server : webservers_streaming) {
+            total_processed += server->getProcessedCount();
+        }
+        for (const auto& server : webservers_processing) {
+            total_processed += server->getProcessedCount();
+        }
+        for (const auto& server : webservers_any) {
             total_processed += server->getProcessedCount();
         }
     }
@@ -125,12 +162,12 @@ void LoadBalancer::shutdown() {
 }
 
 size_t LoadBalancer::getQueueSize() const {
-    return queue.size();
+    return queue_streaming.size() + queue_processing.size();
 }
 
 int LoadBalancer::getServerCount() const {
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(server_vector_mutex));
-    return webservers.size();
+    return webservers_streaming.size() + webservers_processing.size() + webservers_any.size();
 }
 
 int LoadBalancer::getScalingEventCount() const {
@@ -161,7 +198,13 @@ void LoadBalancer::logPeriodicStats(int current_cycle) {
     std::lock_guard<std::mutex> lock(server_vector_mutex);
     
     int total_processed_interval = 0;
-    for (const auto& server : webservers) {
+    for (const auto& server : webservers_streaming) {
+        total_processed_interval += server->getProcessedSinceLastLog();
+    }
+    for (const auto& server : webservers_processing) {
+        total_processed_interval += server->getProcessedSinceLastLog();
+    }
+    for (const auto& server : webservers_any) {
         total_processed_interval += server->getProcessedSinceLastLog();
     }
     
@@ -169,24 +212,43 @@ void LoadBalancer::logPeriodicStats(int current_cycle) {
     std::ostringstream oss;
     oss << "\n=== Cycle " << current_cycle << " Statistics ===\n";
     oss << "  LB " << lb_id << ": ";
-    oss << "Queue=" << queue.size() << ", ";
-    oss << "Servers=" << webservers.size() << ", ";
+    oss << "QueueS=" << queue_streaming.size() << ", ";
+    oss << "QueueP=" << queue_processing.size() << ", ";
+    oss << "Servers=" << (webservers_streaming.size() + webservers_processing.size() + webservers_any.size()) << " (S:" << webservers_streaming.size() << ",P:" << webservers_processing.size() << ",A:" << webservers_any.size() << "), ";
     oss << "Processed=" << total_processed_interval << ", ";
     oss << "Scaling Events=" << (scaling_events_up.load() + scaling_events_down.load());
     log_ptr->log(oss.str());
     
     // Reset interval counters
-    for (const auto& server : webservers) {
+    for (const auto& server : webservers_streaming) {
+        server->resetProcessedSinceLastLog();
+    }
+    for (const auto& server : webservers_processing) {
+        server->resetProcessedSinceLastLog();
+    }
+    for (const auto& server : webservers_any) {
         server->resetProcessedSinceLastLog();
     }
 }
 
-void LoadBalancer::addServer() {
+void LoadBalancer::addServer(char type) {
     std::lock_guard<std::mutex> lock(server_vector_mutex);
     int sid = next_server_id++;
-    webservers.emplace_back(
-        std::make_unique<WebServer>(sid, lb_id, &queue, log_ptr, global_clock_ptr, log_ptr->getLogLevel())
-    );
+    
+    if (type == 'S') {
+        webservers_streaming.emplace_back(
+            std::make_unique<WebServer>(sid, lb_id, &queue_streaming, log_ptr, global_clock_ptr, log_ptr->getLogLevel(), 'S')
+        );
+    } else if (type == 'P') {
+        webservers_processing.emplace_back(
+            std::make_unique<WebServer>(sid, lb_id, &queue_processing, log_ptr, global_clock_ptr, log_ptr->getLogLevel(), 'P')
+        );
+    } else { // type == 'A'
+        // 'A' servers pull from both queues in round-robin fashion
+        webservers_any.emplace_back(
+            std::make_unique<WebServer>(sid, lb_id, &queue_streaming, &queue_processing, log_ptr, global_clock_ptr, log_ptr->getLogLevel(), 'A')
+        );
+    }
 }
 
 void LoadBalancer::removeServer() {
@@ -195,16 +257,22 @@ void LoadBalancer::removeServer() {
     {
         std::lock_guard<std::mutex> lock(server_vector_mutex);
         
-        if (webservers.empty()) {
-            return;
+        // Remove from the largest pool first
+        if (webservers_any.size() > 0) {
+            webservers_any.back()->requestShutdown();
+            server_to_remove = std::move(webservers_any.back());
+            webservers_any.pop_back();
+        } else if (webservers_streaming.size() >= webservers_processing.size() && webservers_streaming.size() > 0) {
+            webservers_streaming.back()->requestShutdown();
+            server_to_remove = std::move(webservers_streaming.back());
+            webservers_streaming.pop_back();
+        } else if (webservers_processing.size() > 0) {
+            webservers_processing.back()->requestShutdown();
+            server_to_remove = std::move(webservers_processing.back());
+            webservers_processing.pop_back();
+        } else {
+            return; // No servers to remove
         }
-        
-        // Request shutdown of the last server
-        webservers.back()->requestShutdown();
-        
-        // Move server out of vector
-        server_to_remove = std::move(webservers.back());
-        webservers.pop_back();
     }
     
     // jthread will automatically join when server_to_remove goes out of scope

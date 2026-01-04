@@ -3,10 +3,19 @@
 #include <iomanip>
 #include <sstream>
 
-WebServer::WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk, int level)
-    : server_id(sid), lb_id(lbid), log_level(level), is_busy(false), 
+WebServer::WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk, int level, char type)
+    : server_id(sid), lb_id(lbid), server_type(type), log_level(level), is_busy(false), 
       total_requests_processed(0), processed_count_interval(0),
-      queue_ptr(q), log_ptr(logger), clock_ptr(clk),
+      queue_ptr(q), queue_ptr_secondary(nullptr), use_primary_queue(true),
+      log_ptr(logger), clock_ptr(clk),
+      worker_thread([this](std::stop_token st) { workerThread(st); }) {
+}
+
+WebServer::WebServer(int sid, int lbid, RequestQueue* q1, RequestQueue* q2, Logger* logger, std::atomic<int>* clk, int level, char type)
+    : server_id(sid), lb_id(lbid), server_type(type), log_level(level), is_busy(false), 
+      total_requests_processed(0), processed_count_interval(0),
+      queue_ptr(q1), queue_ptr_secondary(q2), use_primary_queue(true),
+      log_ptr(logger), clock_ptr(clk),
       worker_thread([this](std::stop_token st) { workerThread(st); }) {
 }
 
@@ -30,6 +39,10 @@ int WebServer::getServerId() const {
     return server_id;
 }
 
+char WebServer::getServerType() const {
+    return server_type;
+}
+
 void WebServer::requestShutdown() {
     worker_thread.request_stop();
 }
@@ -42,11 +55,39 @@ void WebServer::workerThread(std::stop_token st) {
         }
         
         Request req;
+        bool got_request = false;
         
-        // Try to pop request from queue with stop_token support
-        if (!queue_ptr->pop(req, st)) {
-            // Returns false on stop request or global queue shutdown
-            break;
+        // 'A' servers use round-robin between two queues
+        if (queue_ptr_secondary != nullptr && server_type == 'A') {
+            // Try primary queue first based on toggle
+            if (use_primary_queue.load()) {
+                got_request = queue_ptr->pop(req, st);
+                if (!got_request && !st.stop_requested()) {
+                    // Primary queue empty or shutdown, try secondary
+                    got_request = queue_ptr_secondary->pop(req, st);
+                }
+            } else {
+                // Try secondary queue first
+                got_request = queue_ptr_secondary->pop(req, st);
+                if (!got_request && !st.stop_requested()) {
+                    // Secondary queue empty or shutdown, try primary
+                    got_request = queue_ptr->pop(req, st);
+                }
+            }
+            
+            // Toggle for next iteration
+            use_primary_queue.store(!use_primary_queue.load());
+            
+            if (!got_request) {
+                // Both queues returned false (likely shutdown)
+                break;
+            }
+        } else {
+            // Standard single-queue behavior for 'S' and 'P' servers
+            if (!queue_ptr->pop(req, st)) {
+                // Returns false on stop request or global queue shutdown
+                break;
+            }
         }
         
         // Mark as busy
@@ -56,6 +97,7 @@ void WebServer::workerThread(std::stop_token st) {
         if (log_level == 0) {
             std::ostringstream oss;
             oss << "[LB:" << lb_id << "][Server:" << server_id 
+                << "(" << server_type << ")" 
                 << "][Cycle:" << clock_ptr->load() << "] "
                 << "Processing request " << req.request_id 
                 << " from " << req.ip_in 
@@ -71,6 +113,7 @@ void WebServer::workerThread(std::stop_token st) {
         if (log_level == 0) {
             std::ostringstream oss2;
             oss2 << "[LB:" << lb_id << "][Server:" << server_id 
+                 << "(" << server_type << ")" 
                  << "][Cycle:" << clock_ptr->load() << "] "
                  << "Completed request " << req.request_id;
             log_ptr->log(oss2.str());
@@ -87,7 +130,7 @@ void WebServer::workerThread(std::stop_token st) {
     
     // Log thread exit
     std::ostringstream oss;
-    oss << "[LB:" << lb_id << "][Server:" << server_id << "] "
+    oss << "[LB:" << lb_id << "][Server:" << server_id << "(" << server_type << ")" << "] "
         << "Worker thread exiting. Total processed: " 
         << total_requests_processed.load(std::memory_order_relaxed);
     log_ptr->log(oss.str());

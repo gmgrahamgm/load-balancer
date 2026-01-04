@@ -34,6 +34,11 @@ public:
     
     // IP blocking
     std::vector<std::string> blocked_ip_ranges;  // CIDR notation ranges
+    
+    // Type-based load balancing
+    bool sorting;                // Enable type-based request routing (S/P)
+    double streaming_servers;    // Proportion of streaming servers (0.0-1.0)
+    double processing_servers;   // Proportion of processing servers (0.0-1.0)
         // Logging configuration
     int log_level;      // 0=VERBOSE (all requests), 1=PERIODIC (stats every N cycles), 2=QUIET (scaling only)
     int log_interval;   // For PERIODIC mode: print statistics every N cycles
