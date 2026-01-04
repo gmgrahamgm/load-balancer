@@ -2,7 +2,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-Logger::Logger(const std::string& filename) : file_open(false) {
+Logger::Logger(const std::string& filename) : file_open(false), current_log_level(0) {
     // Create logs directory if it doesn't exist
     mkdir("logs", 0755);
     
@@ -40,4 +40,12 @@ void Logger::log(const std::string& message) {
 
 std::mutex& Logger::getMutex() {
     return log_mutex;
+}
+
+void Logger::setLogLevel(int level) {
+    current_log_level = level;
+}
+
+int Logger::getLogLevel() const {
+    return current_log_level;
 }

@@ -64,9 +64,25 @@ public:
     int getScalingEventCount() const;
     
     /**
+     * Get number of scale-up events
+     */
+    int getScalingEventsUp() const;
+    
+    /**
+     * Get number of scale-down events
+     */
+    int getScalingEventsDown() const;
+    
+    /**
      * Get LoadBalancer ID
      */
     int getLoadBalancerId() const;
+    
+    /**
+     * Log periodic statistics (called at log_interval)
+     * @param current_cycle Current clock cycle
+     */
+    void logPeriodicStats(int current_cycle);
     
 private:
     /**
@@ -86,6 +102,7 @@ private:
     std::mutex server_vector_mutex;
     
     int last_scaling_cycle;
+    int last_log_cycle;
     std::atomic<int> scaling_events_up;
     std::atomic<int> scaling_events_down;
     std::atomic<int> next_server_id;

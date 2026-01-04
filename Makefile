@@ -33,8 +33,8 @@ directories:
 	mkdir -p $(OBJ_DIR) $(BIN_DIR) logs
 
 # Main executable
-$(MAIN): $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(IPBLOCKER_OBJ) $(OBJ_DIR)/main.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
+$(MAIN): directories $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(IPBLOCKER_OBJ) $(OBJ_DIR)/main.o
+	$(CXX) $(CXXFLAGS) -o $@ $(CONFIG_OBJ) $(QUEUE_OBJ) $(WEBSERVER_OBJ) $(LOADBALANCER_OBJ) $(LOGGER_OBJ) $(IPBLOCKER_OBJ) $(OBJ_DIR)/main.o
 
 # Test executables
 $(TEST_CONFIG): $(CONFIG_OBJ) $(OBJ_DIR)/test_config.o
@@ -80,8 +80,12 @@ test: $(TEST_CONFIG) $(TEST_REQUEST) $(TEST_QUEUE) $(TEST_WEBSERVER) $(TEST_LOAD
 run: $(MAIN)
 	./$(MAIN) config.txt
 
+# Build and run load balancer
+loadbalancer: $(MAIN)
+	./$(MAIN) config.txt
+
 # Clean
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all directories test run clean
+.PHONY: all directories test run loadbalancer clean

@@ -30,6 +30,18 @@ public:
     void log(const std::string& message);
     
     /**
+     * Set the log level
+     * @param level Log level (0=VERBOSE, 1=PERIODIC, 2=QUIET)
+     */
+    void setLogLevel(int level);
+    
+    /**
+     * Get the current log level
+     * @return Current log level
+     */
+    int getLogLevel() const;
+    
+    /**
      * Get the internal mutex for external synchronization if needed
      * (For backward compatibility with code that needs direct mutex access)
      */
@@ -39,6 +51,7 @@ private:
     std::ofstream file_stream;
     std::mutex log_mutex;
     bool file_open;
+    int current_log_level;
 };
 
 #endif // LOGGER_H

@@ -10,7 +10,7 @@
 /**
  * Represents a web request with random IP addresses, processing time, and job type.
  * Each request is uniquely identified and timestamped.
- * Uses a random number generator frim mt19937 and uniform_int_distribution, gathered from https://codeforces.com/blog/entry/61587?locale=ru.
+ * Uses a random number generator from mt19937 and uniform_int_distribution, gathered from https://codeforces.com/blog/entry/61587?locale=ru.
  */
 struct Request {
     std::string ip_in;        // Incoming IP address

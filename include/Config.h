@@ -34,8 +34,10 @@ public:
     
     // IP blocking
     std::vector<std::string> blocked_ip_ranges;  // CIDR notation ranges
-    
-    // Constructor with default values
+        // Logging configuration
+    int log_level;      // 0=VERBOSE (all requests), 1=PERIODIC (stats every N cycles), 2=QUIET (scaling only)
+    int log_interval;   // For PERIODIC mode: print statistics every N cycles
+        // Constructor with default values
     Config();
     
     /**

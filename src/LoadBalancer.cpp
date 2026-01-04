@@ -4,7 +4,7 @@
 
 LoadBalancer::LoadBalancer(int id, const Config& cfg, std::atomic<int>* clk, Logger* logger)
     : lb_id(id), config(cfg), last_scaling_cycle(-cfg.scaling_cooldown),
-      scaling_events_up(0), scaling_events_down(0), next_server_id(0),
+      last_log_cycle(0), scaling_events_up(0), scaling_events_down(0), next_server_id(0),
       global_clock_ptr(clk), log_ptr(logger), is_shutdown(false) {
     
     // Initialize IP blocker with configured ranges
@@ -34,7 +34,7 @@ LoadBalancer::~LoadBalancer() {
 }
 
 void LoadBalancer::addRequest(const Request& req) {
-    // Check if either IP, in or out, is blocked
+    // Check if either IP (in or out) is blocked
     if (ip_blocker.isBlocked(req.ip_in)) {
         std::ostringstream oss;
         oss << "[LB:" << lb_id << "][BLOCKED] Request " << req.request_id 
@@ -137,15 +137,55 @@ int LoadBalancer::getScalingEventCount() const {
     return scaling_events_up + scaling_events_down;
 }
 
+int LoadBalancer::getScalingEventsUp() const {
+    return scaling_events_up;
+}
+
+int LoadBalancer::getScalingEventsDown() const {
+    return scaling_events_down;
+}
+
 int LoadBalancer::getLoadBalancerId() const {
     return lb_id;
+}
+
+void LoadBalancer::logPeriodicStats(int current_cycle) {
+    // Only log in PERIODIC mode (level 1)
+    if (log_ptr->getLogLevel() != 1) {
+        return;
+    }
+    
+    last_log_cycle = current_cycle;
+    
+    // Gather stats from all WebServers
+    std::lock_guard<std::mutex> lock(server_vector_mutex);
+    
+    int total_processed_interval = 0;
+    for (const auto& server : webservers) {
+        total_processed_interval += server->getProcessedSinceLastLog();
+    }
+    
+    // Log the statistics
+    std::ostringstream oss;
+    oss << "\n=== Cycle " << current_cycle << " Statistics ===\n";
+    oss << "  LB " << lb_id << ": ";
+    oss << "Queue=" << queue.size() << ", ";
+    oss << "Servers=" << webservers.size() << ", ";
+    oss << "Processed=" << total_processed_interval << ", ";
+    oss << "Scaling Events=" << (scaling_events_up.load() + scaling_events_down.load());
+    log_ptr->log(oss.str());
+    
+    // Reset interval counters
+    for (const auto& server : webservers) {
+        server->resetProcessedSinceLastLog();
+    }
 }
 
 void LoadBalancer::addServer() {
     std::lock_guard<std::mutex> lock(server_vector_mutex);
     int sid = next_server_id++;
     webservers.emplace_back(
-        std::make_unique<WebServer>(sid, lb_id, &queue, log_ptr, global_clock_ptr)
+        std::make_unique<WebServer>(sid, lb_id, &queue, log_ptr, global_clock_ptr, log_ptr->getLogLevel())
     );
 }
 

@@ -17,6 +17,8 @@ Config::Config() {
     request_gen_interval_max = 20;
     min_processing_time = 10;
     max_processing_time = 100;
+    log_level = 0;       // Default to VERBOSE
+    log_interval = 500;  // Default to every 500 cycles
 }
 
 bool Config::loadFromFile(const std::string& filename) {
@@ -67,7 +69,7 @@ bool Config::parseLine(const std::string& line) {
     value.erase(0, value.find_first_not_of(" \t"));
     value.erase(value.find_last_not_of(" \t") + 1);
     
-    // Special handling for blocked_ips (comma-separated list)
+    // Special handling for blocked_ips
     if (key == "blocked_ips") {
         // Split value by commas
         blocked_ip_ranges.clear();
@@ -120,6 +122,10 @@ bool Config::parseLine(const std::string& line) {
         min_processing_time = int_value;
     } else if (key == "max_processing_time") {
         max_processing_time = int_value;
+    } else if (key == "log_level") {
+        log_level = int_value;
+    } else if (key == "log_interval") {
+        log_interval = int_value;
     } else {
         // Unknown key
         std::cerr << "Warning: Unknown config key: " << key << std::endl;

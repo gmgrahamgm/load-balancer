@@ -20,8 +20,9 @@ public:
      * @param q Pointer to shared RequestQueue
      * @param logger Pointer to shared Logger
      * @param clk Pointer to shared global clock
+     * @param level Log verbosity level (0=VERBOSE, 1=PERIODIC, 2=QUIET)
      */
-    WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk);
+    WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk, int level);
     
     /**
      * Destructor - automatically joins worker thread
@@ -32,6 +33,16 @@ public:
      * Get total requests processed by this server
      */
     int getProcessedCount() const;
+    
+    /**
+     * Get requests processed since last log interval
+     */
+    int getProcessedSinceLastLog() const;
+    
+    /**
+     * Reset the interval counter (called after periodic stats)
+     */
+    void resetProcessedSinceLastLog();
     
     /**
      * Check if server is currently processing a request
@@ -57,8 +68,10 @@ private:
     
     int server_id;
     int lb_id;
+    int log_level;
     std::atomic<bool> is_busy;
     std::atomic<int> total_requests_processed;
+    std::atomic<int> processed_count_interval;  // Requests processed since last log
     RequestQueue* queue_ptr;
     Logger* log_ptr;
     std::atomic<int>* clock_ptr;

@@ -1,13 +1,13 @@
 # Load Balancer Configuration
 
 # Number of LoadBalancer instances to create
-num_loadbalancers=2
+num_loadbalancers=1
 
 # Initial number of WebServer threads per LoadBalancer
 initial_servers=10
 
 # Total simulation cycles to run
-runtime_cycles=10000
+runtime_cycles=2000
 
 # Scaling threshold: Add server when queue > threshold_high * num_servers
 scaling_threshold_high=25
@@ -15,7 +15,7 @@ scaling_threshold_high=25
 # Scaling threshold: Remove server when queue < threshold_low * num_servers
 scaling_threshold_low=15
 
-# Cooldown period between scaling operations (in cycles)
+# Cooldown period between scaling operations
 scaling_cooldown=100
 
 # Minimum number of servers per LoadBalancer
@@ -34,3 +34,10 @@ max_processing_time=100
 
 # Blocked IP ranges in CIDR notation
 blocked_ips=10.0.0.0/8
+
+# Logging configuration
+# Log level: 0=VERBOSE (all requests), 1=PERIODIC (stats every N cycles), 2=QUIET (scaling only)
+log_level=1
+
+# Log interval (only used when log_level=1): print statistics every N cycles
+log_interval=500

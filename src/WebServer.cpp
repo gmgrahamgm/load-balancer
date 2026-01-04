@@ -3,14 +3,23 @@
 #include <iomanip>
 #include <sstream>
 
-WebServer::WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk)
-    : server_id(sid), lb_id(lbid), is_busy(false), total_requests_processed(0),
+WebServer::WebServer(int sid, int lbid, RequestQueue* q, Logger* logger, std::atomic<int>* clk, int level)
+    : server_id(sid), lb_id(lbid), log_level(level), is_busy(false), 
+      total_requests_processed(0), processed_count_interval(0),
       queue_ptr(q), log_ptr(logger), clock_ptr(clk),
       worker_thread([this](std::stop_token st) { workerThread(st); }) {
 }
 
 int WebServer::getProcessedCount() const {
     return total_requests_processed.load(std::memory_order_relaxed);
+}
+
+int WebServer::getProcessedSinceLastLog() const {
+    return processed_count_interval.load(std::memory_order_relaxed);
+}
+
+void WebServer::resetProcessedSinceLastLog() {
+    processed_count_interval.store(0, std::memory_order_relaxed);
 }
 
 bool WebServer::isBusy() const {
@@ -43,28 +52,33 @@ void WebServer::workerThread(std::stop_token st) {
         // Mark as busy
         is_busy.store(true, std::memory_order_relaxed);
         
-        // Log start of processing
-        std::ostringstream oss;
-        oss << "[LB:" << lb_id << "][Server:" << server_id 
-            << "][Cycle:" << clock_ptr->load() << "] "
-            << "Processing request " << req.request_id 
-            << " from " << req.ip_in 
-            << " (job: " << req.job_type 
-            << ", time: " << req.processing_time << ")";
-        log_ptr->log(oss.str());
+        // Log start of processing (only in VERBOSE mode)
+        if (log_level == 0) {
+            std::ostringstream oss;
+            oss << "[LB:" << lb_id << "][Server:" << server_id 
+                << "][Cycle:" << clock_ptr->load() << "] "
+                << "Processing request " << req.request_id 
+                << " from " << req.ip_in 
+                << " (job: " << req.job_type 
+                << ", time: " << req.processing_time << ")";
+            log_ptr->log(oss.str());
+        }
         
         // Simulate processing by sleeping
         std::this_thread::sleep_for(std::chrono::milliseconds(req.processing_time));
         
-        // Log completion
-        std::ostringstream oss2;
-        oss2 << "[LB:" << lb_id << "][Server:" << server_id 
-             << "][Cycle:" << clock_ptr->load() << "] "
-             << "Completed request " << req.request_id;
-        log_ptr->log(oss2.str());
+        // Log completion (only in VERBOSE mode)
+        if (log_level == 0) {
+            std::ostringstream oss2;
+            oss2 << "[LB:" << lb_id << "][Server:" << server_id 
+                 << "][Cycle:" << clock_ptr->load() << "] "
+                 << "Completed request " << req.request_id;
+            log_ptr->log(oss2.str());
+        }
         
         // Update stats and mark as idle
         total_requests_processed.fetch_add(1, std::memory_order_relaxed);
+        processed_count_interval.fetch_add(1, std::memory_order_relaxed);
         is_busy.store(false, std::memory_order_relaxed);
         
         // If stop is requested during processing, we finish the request
