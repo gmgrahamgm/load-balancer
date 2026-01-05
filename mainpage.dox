@@ -1,0 +1,227 @@
+/**
+ * @mainpage Load Balancer Simulation
+ *
+ * @section intro_sec Introduction
+ *
+ * This project implements a multi-threaded load balancer simulation in C++20 that distributes
+ * incoming web requests across multiple WebServer worker threads. The system demonstrates key
+ * concepts in concurrent programming, queue management, and dynamic resource scaling.
+ *
+ * Key features include:
+ * - **Dynamic server scaling** based on queue size thresholds
+ * - **Type-based request routing** with streaming (S) and processing (P) job types
+ * - **Multi-queue architecture** for specialized server pools
+ * - **IP blocking** with CIDR notation support
+ * - **Thread-safe operations** using C++20 jthread and stop tokens
+ * - **Configurable logging** with multiple verbosity levels
+ *
+ * @section config_sec Example Configuration
+ *
+ * The load balancer is configured through a key=value format file:
+ *
+ * @code
+ * # Load Balancer Configuration
+ * 
+ * # Number of LoadBalancer instances to create
+ * num_loadbalancers=1
+ * 
+ * # Initial number of WebServer threads per LoadBalancer
+ * initial_servers=10
+ * 
+ * # Total simulation cycles to run
+ * runtime_cycles=10000
+ * 
+ * # Scaling thresholds
+ * scaling_threshold_high=25  # Add server when queue > 25 * num_servers
+ * scaling_threshold_low=15   # Remove server when queue < 15 * num_servers
+ * scaling_cooldown=100       # Wait 100 cycles between scaling operations
+ * 
+ * # Server limits
+ * min_servers=5
+ * max_servers=50
+ * 
+ * # Request generation parameters
+ * request_gen_interval_min=5
+ * request_gen_interval_max=20
+ * min_processing_time=10
+ * max_processing_time=100
+ * 
+ * # IP blocking (CIDR notation)
+ * blocked_ips=10.0.0.0/8,192.168.0.0/16
+ * 
+ * # Type-based load balancing
+ * sorting=TRUE              # Enable type-based routing
+ * streaming_servers=0.5     # 50% streaming servers
+ * processing_servers=0.5    # 50% processing servers
+ * 
+ * # Logging configuration
+ * log_level=0               # 0=VERBOSE, 1=PERIODIC, 2=QUIET
+ * log_interval=500          # Log stats every 500 cycles
+ * @endcode
+ *
+ * @section arch_sec System Architecture
+ *
+ * @subsection arch_overview Overview
+ *
+ * The load balancer system consists of several interconnected components that work together
+ * to efficiently process requests:
+ *
+ * @subsection arch_request Request
+ *
+ * The Request struct represents an incoming web request with the following properties:
+ * - **IP addresses**: Source (ip_in) and destination (ip_out) addresses
+ * - **Job type**: 'S' for streaming or 'P' for processing requests
+ * - **Processing time**: Simulated workload duration in milliseconds
+ * - **Metadata**: Unique ID, arrival timestamp for tracking
+ *
+ * Requests are randomly generated with realistic IP addresses and job type distribution.
+ *
+ * @subsection arch_queue RequestQueue
+ *
+ * RequestQueue is a thread-safe FIFO queue implementation that:
+ * - Uses `std::queue<Request>` internally with mutex protection
+ * - Provides **blocking pop** operations with `std::condition_variable_any`
+ * - Supports graceful shutdown signaling to release waiting threads
+ * - Integrates with C++20 stop tokens for cancellation support
+ *
+ * Multiple RequestQueues are used in the system:
+ * - **queue_streaming**: Holds streaming (S) job requests
+ * - **queue_processing**: Holds processing (P) job requests
+ *
+ * @subsection arch_webserver WebServer
+ *
+ * WebServer represents a worker thread that processes requests from queues:
+ * - Each WebServer runs in its own `std::jthread` with automatic joining
+ * - **Server types**: 'S' (streaming), 'P' (processing), or 'A' (any)
+ * - **Single-queue servers** ('S' and 'P'): Pull from one dedicated queue
+ * - **Multi-queue servers** ('A'): Pull from both queues in round-robin fashion
+ * - Tracks statistics: requests processed, busy state, processing time
+ * - Supports graceful shutdown via stop token requests
+ *
+ * The worker thread loop:
+ * 1. Pop request from queue(s) (blocking wait)
+ * 2. Mark server as busy
+ * 3. Simulate processing by sleeping for request.processing_time
+ * 4. Update statistics and mark as idle
+ * 5. Repeat until shutdown requested
+ *
+ * @subsection arch_loadbalancer LoadBalancer
+ *
+ * LoadBalancer is the central orchestrator that manages the entire system:
+ *
+ * **Request Routing**:
+ * - When `sorting=TRUE`: Routes requests based on job_type to appropriate queue
+ *   - 'S' requests → queue_streaming
+ *   - 'P' requests → queue_processing
+ * - When `sorting=FALSE`: Pushes all requests to both queues (servers compete)
+ *
+ * **Server Management**:
+ * - Maintains three server pools:
+ *   - `webservers_streaming`: S-type servers pulling from streaming queue
+ *   - `webservers_processing`: P-type servers pulling from processing queue
+ *   - `webservers_any`: A-type servers pulling from both queues (round-robin)
+ * - Initial allocation based on configuration percentages:
+ *   - streaming_servers=0.5 → 50% of servers are type 'S'
+ *   - processing_servers=0.3 → 30% are type 'P'
+ *   - Remainder (20%) become type 'A'
+ *
+ * **Dynamic Scaling**:
+ * - Monitors combined queue size every cycle
+ * - **Scale up**: When queue_size > scaling_threshold_high × num_servers
+ *   - Adds server of type based on queue imbalance
+ * - **Scale down**: When queue_size < scaling_threshold_low × num_servers
+ *   - Removes server (prioritizes 'A' servers first)
+ * - Enforces cooldown period to prevent thrashing
+ * - Respects min_servers and max_servers limits
+ *
+ * **IP Blocking**:
+ * - Integrates IPBlocker to filter requests by source/destination IP
+ * - Blocks requests before queueing to save resources
+ *
+ * @subsection arch_config Config
+ *
+ * Config handles loading and validation of configuration parameters:
+ * - Parses key=value format files
+ * - Validates numeric ranges and constraints
+ * - Supports special types:
+ *   - Boolean: "TRUE"/"FALSE" for sorting flag
+ *   - Double: 0.0-1.0 for server percentages
+ *   - CSV lists: Comma-separated CIDR ranges for IP blocking
+ * - Enforces constraint: streaming_servers + processing_servers ≤ 1.0
+ *
+ * @subsection arch_logger Logger
+ *
+ * Logger provides thread-safe logging with multiple verbosity levels:
+ * - **VERBOSE (0)**: Logs every request start/completion
+ * - **PERIODIC (1)**: Logs statistics at regular intervals
+ * - **QUIET (2)**: Only logs scaling events
+ *
+ * Uses mutex-protected file I/O to prevent interleaved output from multiple threads.
+ *
+ * @subsection arch_ipblocker IPBlocker
+ *
+ * IPBlocker implements CIDR-based IP filtering:
+ * - Parses CIDR notation (e.g., "10.0.0.0/8")
+ * - Converts IPs to 32-bit integers for fast range checking
+ * - Supports multiple blocked ranges
+ * - Used by LoadBalancer to reject requests before queueing
+ *
+ * @section workflow_sec Execution Flow
+ *
+ * 1. **Initialization**:
+ *    - Load configuration from file
+ *    - Create LoadBalancer instances
+ *    - Initialize server pools based on percentages
+ *    - Pre-fill queues with initial requests
+ *
+ * 2. **Main Simulation Loop** (runs for runtime_cycles):
+ *    - Generate new requests at random intervals
+ *    - Route requests through LoadBalancer.addRequest()
+ *    - LoadBalancer performs IP blocking check
+ *    - Route to appropriate queue(s) based on sorting flag
+ *    - WebServers continuously pull and process requests
+ *    - LoadBalancer checks for scaling conditions every cycle
+ *
+ * 3. **Shutdown**:
+ *    - Signal shutdown to all queues
+ *    - jthreads automatically join on destruction
+ *    - Log final statistics (total processed, scaling events)
+ *
+ * @section performance_sec Performance Characteristics
+ *
+ * **Concurrency Model**:
+ * - Producer-consumer pattern with multiple consumers (WebServers)
+ * - Lock contention minimized by using separate queues for S/P types
+ * - A-type servers provide load balancing between queue types
+ *
+ * **Scalability**:
+ * - Horizontal scaling: Add/remove servers dynamically
+ * - Queue-based decoupling prevents server starvation
+ * - Round-robin for A-servers prevents queue bias
+ *
+ * **Tuning Parameters**:
+ * - Adjust `scaling_threshold_high/low` for responsiveness vs stability
+ * - Increase `scaling_cooldown` to prevent oscillation
+ * - Set `streaming_servers/processing_servers` ratios based on workload
+ *
+ * @section usage_sec Usage
+ *
+ * Compile and run the load balancer:
+ *
+ * @code{.sh}
+ * make all
+ * ./bin/loadbalancer config.txt
+ * @endcode
+ *
+ * Monitor logs in real-time:
+ *
+ * @code{.sh}
+ * tail -f logs/loadbalancer.log
+ * @endcode
+ *
+ * Visualize log data:
+ *
+ * @code{.sh}
+ * python3 visualize-logs.py logs/loadbalancer.log
+ * @endcode
+ */
