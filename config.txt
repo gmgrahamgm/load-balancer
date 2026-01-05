@@ -42,7 +42,7 @@ processing_servers=0.5
 
 # Logging configuration
 # Log level: 0=VERBOSE (all requests), 1=PERIODIC (stats every N cycles), 2=QUIET (scaling only)
-log_level=0
+log_level=1
 
 # Log interval (only used when log_level=1): print statistics every N cycles
 log_interval=500

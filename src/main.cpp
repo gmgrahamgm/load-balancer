@@ -35,6 +35,9 @@ void requestGenerator(LoadBalancer* lb, const Config& config, std::atomic<bool>&
             // Normal activity: random interval
             sleep_ms = interval_dist(gen);
         }
+
+        // Set sleep duration if not using low and high period
+        // sleep_ms = interval_dist(gen);
         
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
         
