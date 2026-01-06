@@ -2,7 +2,7 @@
 """
 Load Balancer Log Visualization Script
 
-Parses logs/loadbalancer.log (VERBOSE mode) and creates visualization of
+Parses logs/Log.txt (VERBOSE mode) and creates visualization of
 dynamic server scaling over time.
 """
 

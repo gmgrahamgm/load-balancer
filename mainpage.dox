@@ -216,12 +216,12 @@
  * Monitor logs in real-time:
  *
  * @code{.sh}
- * tail -f logs/loadbalancer.log
+ * tail -f logs/Log.txt
  * @endcode
  *
  * Visualize log data:
  *
  * @code{.sh}
- * python3 visualize-logs.py logs/loadbalancer.log
+ * python3 visualize-logs.py logs/Log.txt
  * @endcode
  */

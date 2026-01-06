@@ -4,7 +4,7 @@
 num_loadbalancers=1
 
 # Initial number of WebServer threads per LoadBalancer
-initial_servers=15
+initial_servers=10
 
 # Total simulation cycles to run
 runtime_cycles=10000
@@ -33,7 +33,7 @@ min_processing_time=1
 max_processing_time=100
 
 # Blocked IP ranges in CIDR notation
-blocked_ips=10.0.0.0/8
+blocked_ips=14.136.0.0/16
 
 # Type-based load balancing
 sorting=FALSE

@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
     
     // Create shared resources (logger needed for config output)
     std::atomic<int> global_clock(0);
-    Logger logger("loadbalancer.log");
+    Logger logger("Log.txt");
     logger.setLogLevel(config.log_level);  // Set log verbosity level
     std::atomic<bool> shutdown_flag(false);
     std::atomic<int> request_counter(0);
